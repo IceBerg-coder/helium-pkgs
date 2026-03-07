@@ -1,0 +1,12 @@
+he-calc
+he-clock
+he-edit
+he-fetch
+he-logread
+he-matrix
+he-sync
+he-todo
+he-top
+he-tz
+he-user
+he-weather
