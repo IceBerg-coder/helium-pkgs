@@ -1,0 +1,38 @@
+#!/bin/sh
+# he-speedtest: Basic ping & bandwidth tester for Helium OS
+
+PING_TARGET="1.1.1.1"
+# A 10MB test file from tele2
+DL_URL="http://speedtest.tele2.net/10MB.zip"
+PAYLOAD_SIZE_MB=10
+
+printf "Helium Speed Test\n"
+printf "=================\n\n"
+
+printf "Measuring Latency (Ping to %s)...\n" "$PING_TARGET"
+ping -c 5 -q "$PING_TARGET" | awk -F '/' '/round-trip/ {printf "Average Latency: \033[1;36m%s ms\033[0m\n", $5}'
+
+printf "\nMeasuring Download Bandwidth (%sMB payload)...\n" "$PAYLOAD_SIZE_MB"
+
+START_TIME=$(date +%s)
+wget -q -O /dev/null "$DL_URL"
+if [ $? -ne 0 ]; then
+    # Fallback to alternative
+    DL_URL="http://ipv4.download.thinkbroadband.com/10MB.zip"
+    START_TIME=$(date +%s)
+    wget -q -O /dev/null "$DL_URL"
+fi
+END_TIME=$(date +%s)
+
+ELAPSED=$((END_TIME - START_TIME))
+
+if [ "$ELAPSED" -le 0 ]; then
+    ELAPSED=1 # Prevent division by zero if it downloaded in <1s
+fi
+
+# Size in Megabits (1 Byte = 8 bits)
+MEGABITS=$((PAYLOAD_SIZE_MB * 8))
+# Megabits per second
+MBPS=$((MEGABITS / ELAPSED))
+
+printf "Download Speed: \033[1;32m~%d Mbps\033[0m (10MB in %ds)\n" "$MBPS" "$ELAPSED"

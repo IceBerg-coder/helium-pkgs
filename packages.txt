@@ -1,12 +1,16 @@
-he-calc
-he-clock
-he-edit
-he-fetch
-he-logread
-he-matrix
-he-sync
-he-todo
-he-top
-he-tz
-he-user
-he-weather
+he-calc|1.0|Calculator utility
+he-clock|1.0|Digital clock screensaver
+he-edit|1.0|Stylized text editor
+he-fetch|1.0|System information display (like Neofetch)
+he-file-share|1.0|Rapid ad-hoc minimal HTTP File Server
+he-logread|1.0|Circular log reader
+he-matrix|1.0|Terminal matrix falling code animation
+he-ports|1.0|Fast TCP port scanner
+he-speedtest|1.0|Bandwidth and Latency Tester
+he-sync|1.0|Manual NTP Time Synchronization
+he-tetris|1.0|Terminal Tetris Game in C
+he-todo|1.0|Command-line persistence To-Do manager
+he-top|1.0|Process list and system monitor
+he-tz|1.0|Timezone configuration utility
+he-user|1.0|User account manager
+he-weather|1.0|Timezone-aware weather lookup

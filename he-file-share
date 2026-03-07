@@ -1,0 +1,27 @@
+#!/bin/sh
+# he-file-share: Quick local ad-hoc HTTP server
+
+DIR="${1:-$PWD}"
+PORT="${2:-8080}"
+
+if [ ! -d "$DIR" ]; then
+    printf "\033[1;31mError: Directory '%s' does not exist.\033[0m\n" "$DIR"
+    exit 1
+fi
+
+# Attempt to detect local IP
+IP=$(ifconfig eth0 2>/dev/null | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')
+if [ -z "$IP" ]; then
+    IP="127.0.0.1"
+fi
+
+trap 'printf "\n\033[1;33mShutting down file share...\033[0m\n"; exit 0' INT
+
+printf "Helium File Share\n"
+printf "=================\n"
+printf "Serving directory: \033[1;36m%s\033[0m\n" "$DIR"
+printf "Access via browser: \033[1;32mhttp://%s:%s/\033[0m\n" "$IP" "$PORT"
+printf "(Press Ctrl+C to stop)\n\n"
+
+# Run httpd in foreground
+httpd -p "$PORT" -h "$DIR" -f
