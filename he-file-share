@@ -15,7 +15,23 @@ if [ -z "$IP" ]; then
     IP="127.0.0.1"
 fi
 
-trap 'printf "\n\033[1;33mShutting down file share...\033[0m\n"; exit 0' INT
+trap 'printf "\n\033[1;33mShutting down file share...\033[0m\n"; rm -rf "$DIR/cgi-bin" 2>/dev/null; exit 0' INT
+
+# Create a temporary CGI directory to enable BusyBox httpd auto-indexing
+mkdir -p "$DIR/cgi-bin"
+cat << 'CGIEOF' > "$DIR/cgi-bin/index.cgi"
+#!/bin/sh
+printf "Content-type: text/html\r\n\r\n"
+printf "<html><head><title>Index of %s</title></head><body>\n" "$QUERY_STRING"
+printf "<h1>Index of %s</h1><hr><pre>\n" "$QUERY_STRING"
+ls -la "../$QUERY_STRING" | tail -n +2 | awk '{
+    if ($9 != "cgi-bin") {
+        printf "<a href=\"%s\">%s</a>\n", $9, $0
+    }
+}'
+printf "</pre><hr><i>Helium OS File Share</i></body></html>\n"
+CGIEOF
+chmod +x "$DIR/cgi-bin/index.cgi"
 
 printf "Helium File Share\n"
 printf "=================\n"
