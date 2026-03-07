@@ -24,4 +24,4 @@ printf "Access via browser: \033[1;32mhttp://%s:%s/\033[0m\n" "$IP" "$PORT"
 printf "(Press Ctrl+C to stop)\n\n"
 
 # Run httpd in foreground
-httpd -p "$PORT" -h "$DIR" -f
+httpd -p "$PORT" -h "$DIR" -f -v
