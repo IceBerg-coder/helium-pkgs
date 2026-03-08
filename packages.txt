@@ -9,6 +9,7 @@ he-logread|1.0|Circular log reader
 he-matrix|1.0|Terminal matrix falling code animation
 he-monitor|1.0|Live system dashboard (CPU, RAM, disk, network)
 he-ports|1.0|Fast TCP port scanner
+he-proc|1.0|Interactive process manager (kill, signal, renice)
 he-speedtest|1.0|Bandwidth and Latency Tester
 he-sync|1.0|Manual NTP Time Synchronization
 he-tetris|1.0|Terminal Tetris Game in C
