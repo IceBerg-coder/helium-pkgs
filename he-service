@@ -1,0 +1,441 @@
+#!/bin/sh
+
+# he-service: Helium OS Service Manager
+# Usage: he-service {list|status|start|stop|restart|enable|disable|logs|boot} [service]
+#
+# Service definitions live in /etc/services.d/ with these fields:
+#   NAME, DESC, CMD, PIDFILE, PRIORITY, TYPE,
+#   START_CMD, STOP_CMD, STATUS_CMD, SETUP_CMD, BG
+
+SERVICES_DIR="/etc/services.d"
+LOG_FILE="/data/log/messages"
+CONF_FILE="/data/services.conf"
+DEFAULT_SERVICES="syslogd klogd httpd sshd ntpd"
+
+# Colors
+GREEN="\033[32m"
+RED="\033[31m"
+YELLOW="\033[33m"
+CYAN="\033[36m"
+BOLD="\033[1m"
+DIM="\033[90m"
+RESET="\033[0m"
+
+# Initialize config if it doesn't exist
+init_config() {
+    if [ ! -f "$CONF_FILE" ]; then
+        mkdir -p /data
+        touch "$CONF_FILE"
+        for svc in $DEFAULT_SERVICES; do
+            echo "$svc" >> "$CONF_FILE"
+        done
+    fi
+}
+
+# Load a service definition, resetting defaults first
+load_svc() {
+    NAME="" DESC="" CMD="" PIDFILE="" START_CMD="" STOP_CMD=""
+    STATUS_CMD="" SETUP_CMD="" PRIORITY=50
+    TYPE="daemon" BG=""
+    # Source the service definition
+    if [ -f "$SERVICES_DIR/$1" ]; then
+        . "$SERVICES_DIR/$1"
+    fi
+}
+
+# Check if a service is enabled
+is_enabled() {
+    init_config
+    grep -q "^${1}$" "$CONF_FILE"
+}
+
+# Get PID of a running service
+get_pid() {
+    local svc="$1"
+    load_svc "$svc"
+
+    # Try pidfile first
+    if [ -n "$PIDFILE" ] && [ -f "$PIDFILE" ]; then
+        local pid=$(cat "$PIDFILE" 2>/dev/null)
+        if [ -n "$pid" ] && [ -d "/proc/$pid" ]; then
+            echo "$pid"
+            return 0
+        fi
+    fi
+
+    # Try to find by process name from CMD
+    if [ -n "$CMD" ]; then
+        local bin=$(echo "$CMD" | awk '{print $1}')
+        local bin_base=$(basename "$bin")
+        local pid=$(pidof "$bin_base" 2>/dev/null | awk '{print $1}')
+        if [ -n "$pid" ]; then
+            echo "$pid"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# Check if a service is running
+is_running() {
+    local svc="$1"
+    load_svc "$svc"
+
+    # For oneshot services, use STATUS_CMD if available
+    if [ "$TYPE" = "oneshot" ] && [ -n "$STATUS_CMD" ]; then
+        eval "$STATUS_CMD" >/dev/null 2>&1
+        return $?
+    fi
+
+    # For daemons, check PID
+    get_pid "$svc" >/dev/null 2>&1
+}
+
+# Get services sorted by priority
+get_sorted_services() {
+    for svc_file in "$SERVICES_DIR"/*; do
+        [ -f "$svc_file" ] || continue
+        PRIORITY=50
+        . "$svc_file"
+        printf "%03d:%s\n" "$PRIORITY" "$(basename "$svc_file")"
+    done | sort -n
+}
+
+# ---- list: show all services ----
+do_list() {
+    init_config
+    printf "${BOLD}${CYAN}%-14s %-10s %-8s %-6s %s${RESET}\n" \
+        "SERVICE" "STATUS" "ENABLED" "PID" "DESCRIPTION"
+    printf "%-14s %-10s %-8s %-6s %s\n" \
+        "───────" "──────" "───────" "───" "───────────"
+
+    get_sorted_services | while IFS=: read pri svc; do
+        load_svc "$svc"
+
+        local enabled="yes"
+        local en_color="$GREEN"
+        if ! is_enabled "$svc"; then
+            enabled="no"
+            en_color="$RED"
+        fi
+
+        local pid=$(get_pid "$svc" 2>/dev/null)
+        local status="stopped"
+        local st_color="$RED"
+
+        if [ "$TYPE" = "oneshot" ] && [ -n "$STATUS_CMD" ]; then
+            if eval "$STATUS_CMD" >/dev/null 2>&1; then
+                status="active"
+                st_color="$GREEN"
+                pid="-"
+            else
+                pid="-"
+            fi
+        elif [ -n "$pid" ]; then
+            status="running"
+            st_color="$GREEN"
+        else
+            pid="-"
+        fi
+
+        printf "${BOLD}%-14s${RESET} ${st_color}%-10s${RESET} ${en_color}%-8s${RESET} %-6s %s\n" \
+            "$svc" "$status" "$enabled" "$pid" "$DESC"
+    done
+}
+
+# ---- status: detailed status ----
+do_status() {
+    local svc="$1"
+    if [ ! -f "$SERVICES_DIR/$svc" ]; then
+        echo "Unknown service: $svc"
+        echo "Run 'he-service list' to see available services."
+        return 1
+    fi
+
+    load_svc "$svc"
+
+    local enabled="yes"
+    local en_color="$GREEN"
+    if ! is_enabled "$svc"; then
+        enabled="no"
+        en_color="$RED"
+    fi
+
+    local running=0
+    local pid=""
+
+    if [ "$TYPE" = "oneshot" ] && [ -n "$STATUS_CMD" ]; then
+        if eval "$STATUS_CMD" >/dev/null 2>&1; then
+            running=1
+        fi
+    else
+        pid=$(get_pid "$svc" 2>/dev/null)
+        [ -n "$pid" ] && running=1
+    fi
+
+    if [ $running -eq 1 ]; then
+        printf "${GREEN}${BOLD}● $svc${RESET} - $DESC\n"
+        printf "  Status:  ${GREEN}active (running)${RESET}\n"
+        [ -n "$pid" ] && printf "  PID:     $pid\n"
+    else
+        printf "${RED}${BOLD}● $svc${RESET} - $DESC\n"
+        printf "  Status:  ${RED}inactive (stopped)${RESET}\n"
+    fi
+
+    printf "  Enabled: ${en_color}%s${RESET}\n" "$enabled"
+    printf "  Type:    %s\n" "$TYPE"
+    [ -n "$CMD" ] && printf "  CMD:     $CMD\n"
+    [ -n "$START_CMD" ] && printf "  Start:   $START_CMD\n"
+    [ -n "$STOP_CMD" ]  && printf "  Stop:    $STOP_CMD\n"
+}
+
+# ---- start: start a service ----
+do_start() {
+    local svc="$1"
+    local quiet="$2"
+
+    if [ ! -f "$SERVICES_DIR/$svc" ]; then
+        echo "Unknown service: $svc"
+        return 1
+    fi
+
+    if is_running "$svc"; then
+        [ "$quiet" != "quiet" ] && echo "$svc is already running."
+        return 0
+    fi
+
+    load_svc "$svc"
+
+    # Run setup command if defined (e.g., SSH key generation)
+    if [ -n "$SETUP_CMD" ]; then
+        eval "$SETUP_CMD" 2>/dev/null
+    fi
+
+    [ "$quiet" != "quiet" ] && printf "Starting $svc... "
+
+    if [ -n "$START_CMD" ]; then
+        eval "$START_CMD" >/dev/null 2>&1
+    elif [ "$BG" = "yes" ]; then
+        sh -c "$CMD" >/dev/null 2>&1 &
+    else
+        sh -c "$CMD" >/dev/null 2>&1
+    fi
+
+    # Check if started
+    sleep 1
+    if is_running "$svc"; then
+        [ "$quiet" != "quiet" ] && printf "${GREEN}OK${RESET}\n"
+        return 0
+    else
+        [ "$quiet" != "quiet" ] && printf "${RED}FAILED${RESET}\n"
+        return 1
+    fi
+}
+
+# ---- stop: stop a service ----
+do_stop() {
+    local svc="$1"
+    if [ ! -f "$SERVICES_DIR/$svc" ]; then
+        echo "Unknown service: $svc"
+        return 1
+    fi
+
+    load_svc "$svc"
+
+    # Handle oneshot services
+    if [ "$TYPE" = "oneshot" ]; then
+        if [ -n "$STOP_CMD" ]; then
+            printf "Stopping $svc... "
+            eval "$STOP_CMD" >/dev/null 2>&1
+            printf "${GREEN}OK${RESET}\n"
+            return 0
+        else
+            echo "$svc is a oneshot service with no stop command."
+            return 1
+        fi
+    fi
+
+    local pid=$(get_pid "$svc" 2>/dev/null)
+    if [ -z "$pid" ]; then
+        echo "$svc is not running."
+        return 0
+    fi
+
+    printf "Stopping $svc (PID $pid)... "
+    if [ -n "$STOP_CMD" ]; then
+        eval "$STOP_CMD" >/dev/null 2>&1
+    else
+        kill "$pid" 2>/dev/null
+    fi
+
+    sleep 1
+    if ! is_running "$svc"; then
+        printf "${GREEN}OK${RESET}\n"
+    else
+        kill -9 "$pid" 2>/dev/null
+        sleep 1
+        printf "${YELLOW}KILLED${RESET}\n"
+    fi
+}
+
+# ---- restart ----
+do_restart() {
+    do_stop "$1"
+    do_start "$1"
+}
+
+# ---- enable/disable ----
+do_enable() {
+    local svc="$1"
+    if [ ! -f "$SERVICES_DIR/$svc" ]; then
+        echo "Unknown service: $svc"
+        return 1
+    fi
+    init_config
+    if ! is_enabled "$svc"; then
+        echo "$svc" >> "$CONF_FILE"
+    fi
+    load_svc "$svc"
+    printf "${GREEN}Enabled${RESET}: $svc ($DESC)\n"
+    echo "  Service will start on next boot."
+}
+
+do_disable() {
+    local svc="$1"
+    if [ ! -f "$SERVICES_DIR/$svc" ]; then
+        echo "Unknown service: $svc"
+        return 1
+    fi
+    init_config
+    if is_enabled "$svc"; then
+        grep -v "^${svc}$" "$CONF_FILE" > "${CONF_FILE}.tmp"
+        mv "${CONF_FILE}.tmp" "$CONF_FILE"
+    fi
+    load_svc "$svc"
+    printf "${RED}Disabled${RESET}: $svc ($DESC)\n"
+    echo "  Service will NOT start on next boot."
+}
+
+# ---- logs ----
+do_logs() {
+    local svc="$1"
+    if [ ! -f "$SERVICES_DIR/$svc" ]; then
+        echo "Unknown service: $svc"
+        return 1
+    fi
+
+    load_svc "$svc"
+    local bin=$(echo "$CMD" | awk '{print $1}')
+    local bin_base=$(basename "$bin")
+
+    echo "${BOLD}Recent logs for $svc ($bin_base):${RESET}"
+    echo "---"
+    if [ -f "$LOG_FILE" ]; then
+        grep -i "$bin_base\|$svc" "$LOG_FILE" | tail -20
+    else
+        echo "(no log file found at $LOG_FILE)"
+    fi
+}
+
+# ---- boot: start all enabled services in priority order ----
+do_boot() {
+    init_config
+
+    get_sorted_services | while IFS=: read pri svc; do
+        # Skip disabled services
+        if ! is_enabled "$svc"; then
+            printf "  ${DIM}%-16s skipped (disabled)${RESET}\n" "$svc"
+            continue
+        fi
+
+        # Skip already running
+        if is_running "$svc"; then
+            printf "  ${GREEN}%-16s already running${RESET}\n" "$svc"
+            continue
+        fi
+
+        # Load and start
+        load_svc "$svc"
+
+        # Run setup
+        if [ -n "$SETUP_CMD" ]; then
+            eval "$SETUP_CMD" 2>/dev/null
+        fi
+
+        # Start the service
+        if [ -n "$START_CMD" ]; then
+            eval "$START_CMD" >/dev/null 2>&1
+        elif [ "$BG" = "yes" ]; then
+            sh -c "$CMD" >/dev/null 2>&1 &
+        else
+            sh -c "$CMD" >/dev/null 2>&1
+        fi
+
+        sleep 1
+
+        # Check result
+        if is_running "$svc"; then
+            printf "  ${GREEN}%-16s started${RESET}\n" "$svc"
+        else
+            printf "  ${RED}%-16s FAILED${RESET}\n" "$svc"
+        fi
+    done
+}
+
+# --- Main ---
+case "$1" in
+    list|ls)
+        do_list
+        ;;
+    status|st)
+        [ -z "$2" ] && { echo "Usage: he-service status <name>"; exit 1; }
+        do_status "$2"
+        ;;
+    start)
+        [ -z "$2" ] && { echo "Usage: he-service start <name>"; exit 1; }
+        do_start "$2"
+        ;;
+    stop)
+        [ -z "$2" ] && { echo "Usage: he-service stop <name>"; exit 1; }
+        do_stop "$2"
+        ;;
+    restart)
+        [ -z "$2" ] && { echo "Usage: he-service restart <name>"; exit 1; }
+        do_restart "$2"
+        ;;
+    enable)
+        [ -z "$2" ] && { echo "Usage: he-service enable <name>"; exit 1; }
+        do_enable "$2"
+        ;;
+    disable)
+        [ -z "$2" ] && { echo "Usage: he-service disable <name>"; exit 1; }
+        do_disable "$2"
+        ;;
+    logs|log)
+        [ -z "$2" ] && { echo "Usage: he-service logs <name>"; exit 1; }
+        do_logs "$2"
+        ;;
+    boot)
+        do_boot
+        ;;
+    *)
+        printf "%b\n" "${BOLD}${CYAN}Helium Service Manager${RESET}"
+        echo ""
+        echo "Usage: he-service <command> [service]"
+        echo ""
+        echo "Commands:"
+        echo "  list              Show all services and their status"
+        echo "  status <name>     Show detailed status of a service"
+        echo "  start <name>      Start a service"
+        echo "  stop <name>       Stop a running service"
+        echo "  restart <name>    Restart a service"
+        echo "  enable <name>     Enable service to start on boot"
+        echo "  disable <name>    Disable service from starting on boot"
+        echo "  logs <name>       Show recent log entries"
+        echo "  boot              Start all enabled services (used by rcS)"
+        exit 1
+        ;;
+esac
+
+exit 0
