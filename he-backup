@@ -1,0 +1,132 @@
+#!/bin/sh
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+BACKUP_DIR="/data/backups"
+SOURCE_DIR="/data"
+
+# Ensure backup directory exists
+mkdir -p "$BACKUP_DIR"
+
+show_help() {
+    printf "${CYAN}Helium OS Backup Utility${NC}\n"
+    printf "Usage: he-backup <command> [arguments]\n\n"
+    printf "Commands:\n"
+    printf "  create             Create a new backup of %s\n" "$SOURCE_DIR"
+    printf "  list               List existing backups in %s\n" "$BACKUP_DIR"
+    printf "  restore <filename> Restore from a specific backup file\n"
+    printf "  delete <filename>  Delete a specific backup file\n"
+    printf "  help               Show this help message\n"
+}
+
+cmd_create() {
+    TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+    BACKUP_FILE="$BACKUP_DIR/helium-backup-${TIMESTAMP}.tar.gz"
+
+    printf "${CYAN}Creating backup: %s${NC}\n" "$BACKUP_FILE"
+
+    # Backup /data but exclude /data/backups
+    if tar -czf "$BACKUP_FILE" --exclude="data/backups" -C / data; then
+        printf "${GREEN}Backup created successfully!${NC}\n"
+    else
+        printf "${RED}Failed to create backup!${NC}\n"
+        rm -f "$BACKUP_FILE"
+        exit 1
+    fi
+}
+
+cmd_list() {
+    printf "${CYAN}Available backups in %s:${NC}\n" "$BACKUP_DIR"
+
+    found=0
+    for file in "$BACKUP_DIR"/helium-backup-*.tar.gz; do
+        if [ -f "$file" ]; then
+            found=1
+            size=$(du -h "$file" | cut -f1)
+            filename=$(basename "$file")
+            printf "  %s (Size: %s)\n" "$filename" "$size"
+        fi
+    done
+
+    if [ $found -eq 0 ]; then
+        printf "  No backups found.\n"
+    fi
+}
+
+cmd_restore() {
+    if [ -z "$1" ]; then
+        printf "${RED}Error: Must specify a backup file to restore.${NC}\n"
+        printf "Usage: he-backup restore <filename>\n"
+        exit 1
+    fi
+
+    BACKUP_FILE="$BACKUP_DIR/$1"
+
+    if [ ! -f "$BACKUP_FILE" ]; then
+        printf "${RED}Error: Backup file '%s' not found!${NC}\n" "$1"
+        exit 1
+    fi
+
+    printf "${RED}WARNING: This will OVERWRITE current contents of %s!${NC}\n" "$SOURCE_DIR"
+    printf "${CYAN}Are you sure you want to restore from %s? (y/N): ${NC}" "$1"
+
+    read -r confirm
+    case "$confirm" in
+        [yY]|[yY][eE][sS])
+            printf "${CYAN}Restoring backup...${NC}\n"
+            if tar -xzf "$BACKUP_FILE" -C /; then
+                printf "${GREEN}Restore completed successfully!${NC}\n"
+            else
+                printf "${RED}Failed to restore backup!${NC}\n"
+                exit 1
+            fi
+            ;;
+        *)
+            printf "Restore cancelled.\n"
+            ;;
+    esac
+}
+
+cmd_delete() {
+    if [ -z "$1" ]; then
+        printf "${RED}Error: Must specify a backup file to delete.${NC}\n"
+        printf "Usage: he-backup delete <filename>\n"
+        exit 1
+    fi
+
+    BACKUP_FILE="$BACKUP_DIR/$1"
+
+    if [ ! -f "$BACKUP_FILE" ]; then
+        printf "${RED}Error: Backup file '%s' not found!${NC}\n" "$1"
+        exit 1
+    fi
+
+    if rm -f "$BACKUP_FILE"; then
+        printf "${GREEN}Backup '%s' deleted successfully.${NC}\n" "$1"
+    else
+        printf "${RED}Failed to delete backup '%s'.${NC}\n" "$1"
+        exit 1
+    fi
+}
+
+case "$1" in
+    create)
+        cmd_create
+        ;;
+    list)
+        cmd_list
+        ;;
+    restore)
+        cmd_restore "$2"
+        ;;
+    delete)
+        cmd_delete "$2"
+        ;;
+    help|*)
+        show_help
+        ;;
+esac

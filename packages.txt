@@ -1,4 +1,5 @@
 he-archive|1.0|Universal archive tool (tar, gz, bz2, xz, zip, cpio)
+he-backup|1.0|Backup and restore tool for /data partition
 he-2048|1.0|Terminal 2048 puzzle game
 he-calc|2.0|Interactive math expression evaluator (REPL, PEMDAS)
 he-clock|1.0|Digital clock screensaver
