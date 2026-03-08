@@ -1,0 +1,96 @@
+#!/bin/sh
+# he-wget: A wrapper around wget to provide a visual progress indicator
+
+# Colors
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+usage() {
+    echo "Usage: $0 <url> [-O <outfile>]"
+    exit 1
+}
+
+# Parse arguments
+URL=""
+OUTFILE=""
+
+if [ $# -eq 0 ]; then
+    usage
+fi
+
+URL="$1"
+shift
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -O)
+            if [ -n "$2" ]; then
+                OUTFILE="$2"
+                shift 2
+            else
+                echo "Error: -O requires an output file."
+                usage
+            fi
+            ;;
+        *)
+            echo "Unknown option: $1"
+            usage
+            ;;
+    esac
+done
+
+# Extract filename from URL if not provided
+if [ -z "$OUTFILE" ]; then
+    OUTFILE=$(basename "$URL")
+    if [ -z "$OUTFILE" ]; then
+        OUTFILE="downloaded_file"
+    fi
+fi
+
+echo "Downloading '$URL' to '$OUTFILE'..."
+
+# Remove output file if it exists to accurately check size later
+rm -f "$OUTFILE"
+
+# Start wget in the background
+wget -q -O "$OUTFILE" "$URL" &
+WGET_PID=$!
+
+# Spinner animation
+SPINNER="/-\|"
+i=0
+
+while kill -0 $WGET_PID 2>/dev/null; do
+    # Get current file size if the file exists
+    SIZE="0 B"
+    if [ -f "$OUTFILE" ]; then
+        SIZE=$(du -h "$OUTFILE" 2>/dev/null | cut -f1)
+        if [ -z "$SIZE" ]; then
+            SIZE="0 B"
+        fi
+    fi
+
+    # Display spinner and size
+    char=$(echo "$SPINNER" | cut -c $(( (i % 4) + 1 )))
+    printf "\r[%s] Downloaded: %s" "$char" "$SIZE"
+
+    i=$((i + 1))
+    sleep 0.1
+done
+
+# Wait for wget to finish and get exit status
+wait $WGET_PID
+WGET_STATUS=$?
+
+# Clear the line
+printf "\r\033[K"
+
+if [ $WGET_STATUS -eq 0 ]; then
+    FINAL_SIZE=$(du -h "$OUTFILE" 2>/dev/null | cut -f1)
+    printf "${GREEN}Success: Downloaded %s (%s)${NC}\n" "$OUTFILE" "$FINAL_SIZE"
+else
+    printf "${RED}Error: Failed to download %s${NC}\n" "$URL"
+    rm -f "$OUTFILE"
+    exit $WGET_STATUS
+fi
