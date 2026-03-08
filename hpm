@@ -1,0 +1,174 @@
+#!/bin/sh
+
+REPO_URL="https://raw.githubusercontent.com/IceBerg-coder/helium-pkgs/main"
+HPM_DIR="/data/hpm"
+BIN_DIR="$HPM_DIR/bin"
+VAR_DIR="$HPM_DIR/var"
+INSTALLED_LIST="$HPM_DIR/installed.list"
+PKG_INDEX="$VAR_DIR/packages.txt"
+
+# Ensure directories exist
+mkdir -p "$BIN_DIR" "$VAR_DIR"
+touch "$INSTALLED_LIST"
+
+usage() {
+    printf "Helium Package Manager (hpm) v2\n"
+    printf "Usage:\n"
+    printf "  hpm update          - Fetch latest package list from repository\n"
+    printf "  hpm update-self     - Update hpm to the latest version\n"
+    printf "  hpm list            - List all available packages\n"
+    printf "  hpm search <pkg>    - Search for a package\n"
+    printf "  hpm install <pkg>   - Install a package\n"
+    printf "  hpm remove <pkg>    - Remove an installed package\n"
+    printf "  hpm upgrade <pkg>   - Re-download and update a package\n"
+    printf "  hpm list-installed  - List installed packages\n"
+}
+
+verify_checksum() {
+    PKG_NAME_VC="$1"
+    TMP_FILE_VC="$2"
+
+    if [ -f "$PKG_INDEX" ]; then
+        EXPECTED_HASH=$(awk -F '|' -v pkg="$PKG_NAME_VC" '$1 == pkg {print $4; exit}' "$PKG_INDEX" | tr -d '\r')
+    else
+        EXPECTED_HASH=""
+    fi
+
+    if [ -n "$EXPECTED_HASH" ]; then
+        ACTUAL_HASH=$(sha256sum "$TMP_FILE_VC" | awk '{print $1}')
+        if [ "$ACTUAL_HASH" != "$EXPECTED_HASH" ]; then
+            return 1
+        fi
+    fi
+    return 0
+}
+
+case "$1" in
+    update)
+        echo "Updating package index from Helium Registry..."
+        wget -q -O "$PKG_INDEX.tmp" "$REPO_URL/packages.txt"
+        if [ $? -eq 0 ]; then
+            mv "$PKG_INDEX.tmp" "$PKG_INDEX"
+            echo "Index updated successfully. ($(wc -l < "$PKG_INDEX") packages)"
+        else
+            echo "Error: Could not fetch package list."
+            rm -f "$PKG_INDEX.tmp"
+        fi
+        ;;
+    update-self)
+        echo "Updating hpm..."
+        HPM_SCRIPT="$0"
+        TMP_HPM="/tmp/hpm_update.tmp"
+        wget -q -O "$TMP_HPM" "https://raw.githubusercontent.com/IceBerg-coder/heliumOS/main/src/hpm"
+        if [ $? -eq 0 ]; then
+            mv "$TMP_HPM" "$HPM_SCRIPT"
+            chmod +x "$HPM_SCRIPT"
+            printf "\033[1;32mSuccessfully updated hpm\033[0m\n"
+        else
+            printf "\033[1;31mError: Could not update hpm.\033[0m\n"
+            rm -f "$TMP_HPM"
+            exit 1
+        fi
+        ;;
+    list)
+        if [ ! -f "$PKG_INDEX" ]; then
+            echo "Package index not found. Run 'hpm update' first."
+            exit 1
+        fi
+        echo "Available packages:"
+        awk -F '|' '{printf "  \033[1;36m%-15s\033[0m %-10s %s\n", $1, $2, $3}' "$PKG_INDEX"
+        ;;
+    search)
+        if [ -z "$2" ]; then usage; exit 1; fi
+        if [ ! -f "$PKG_INDEX" ]; then
+            echo "Package index not found. Run 'hpm update' first."
+            exit 1
+        fi
+        echo "Search results for '$2':"
+        grep -i "$2" "$PKG_INDEX" | awk -F '|' '{printf "  \033[1;36m%-15s\033[0m %-10s %s\n", $1, $2, $3}'
+        ;;
+    list-installed)
+        if [ ! -s "$INSTALLED_LIST" ]; then
+            echo "No packages installed."
+            exit 0
+        fi
+        echo "Installed packages:"
+        cat "$INSTALLED_LIST" | sed 's/^/  - /'
+        ;;
+    install)
+        if [ -z "$2" ]; then usage; exit 1; fi
+        PKG="$2"
+
+        # Check if already installed
+        if grep -q "^${PKG}$" "$INSTALLED_LIST"; then
+            echo "Package '$PKG' is already installed."
+            exit 0
+        fi
+
+        echo "Fetching $PKG from repository..."
+        TMP_PKG="$BIN_DIR/$PKG.tmp"
+        wget -q -O "$TMP_PKG" "$REPO_URL/$PKG"
+        if [ $? -eq 0 ]; then
+            if ! verify_checksum "$PKG" "$TMP_PKG"; then
+                printf "\033[1;31mError: Checksum verification failed for $PKG. Aborting.\033[0m\n"
+                rm -f "$TMP_PKG"
+                exit 1
+            fi
+
+            mv "$TMP_PKG" "$BIN_DIR/$PKG"
+            chmod +x "$BIN_DIR/$PKG"
+            echo "$PKG" >> "$INSTALLED_LIST"
+            printf "\033[1;32mSuccessfully installed $PKG\033[0m\n"
+        else
+            printf "\033[1;31mError: Could not download package $PKG. Does it exist?\033[0m\n"
+            rm -f "$TMP_PKG"
+        fi
+        ;;
+    remove)
+        if [ -z "$2" ]; then usage; exit 1; fi
+        PKG="$2"
+
+        if ! grep -q "^${PKG}$" "$INSTALLED_LIST"; then
+            echo "Package '$PKG' is not installed."
+            exit 1
+        fi
+
+        rm -f "$BIN_DIR/$PKG"
+        # Remove line from installed list
+        sed "/^${PKG}$/d" "$INSTALLED_LIST" > "$INSTALLED_LIST.tmp"
+        mv "$INSTALLED_LIST.tmp" "$INSTALLED_LIST"
+        printf "\033[1;33mRemoved $PKG\033[0m\n"
+        ;;
+    upgrade)
+        if [ -z "$2" ]; then usage; exit 1; fi
+        PKG="$2"
+
+        if ! grep -q "^${PKG}$" "$INSTALLED_LIST"; then
+            echo "Package '$PKG' is not installed. Use 'hpm install $PKG' first."
+            exit 1
+        fi
+
+        echo "Upgrading $PKG..."
+        TMP_PKG="$BIN_DIR/$PKG.tmp"
+        wget -q -O "$TMP_PKG" "$REPO_URL/$PKG"
+        if [ $? -eq 0 ]; then
+            if ! verify_checksum "$PKG" "$TMP_PKG"; then
+                printf "\033[1;31mError: Checksum verification failed for $PKG. Aborting.\033[0m\n"
+                rm -f "$TMP_PKG"
+                exit 1
+            fi
+
+            mv "$TMP_PKG" "$BIN_DIR/$PKG"
+            chmod +x "$BIN_DIR/$PKG"
+            printf "\033[1;32mSuccessfully upgraded $PKG\033[0m\n"
+        else
+            printf "\033[1;31mError: Could not download package $PKG.\033[0m\n"
+            rm -f "$TMP_PKG"
+            exit 1
+        fi
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac
