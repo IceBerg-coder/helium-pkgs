@@ -4,7 +4,7 @@ he-2048|1.0|Terminal 2048 puzzle game
 he-calc|2.0|Interactive math expression evaluator (REPL, PEMDAS)
 he-clock|1.0|Digital clock screensaver
 he-disk|1.0|Disk usage analyzer with visual bars
-he-edit|3.0|Terminal text editor with syntax highlighting, search, and scrolling
+he-edit|3.1|Terminal text editor with mouse support, syntax highlighting
 he-fetch|2.0|System information display with colorful ASCII art and detailed stats
 he-file-share|1.0|Rapid ad-hoc minimal HTTP File Server
 he-health|1.0|System health checker with pass/warn/fail diagnostics
