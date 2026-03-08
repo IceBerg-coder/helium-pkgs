@@ -1,5 +1,6 @@
 he-calc|1.0|Calculator utility
 he-clock|1.0|Digital clock screensaver
+he-disk|1.0|Disk usage analyzer with visual bars
 he-edit|2.0|Terminal text editor with cursor nav, search, and scrolling
 he-fetch|1.0|System information display (like Neofetch)
 he-file-share|1.0|Rapid ad-hoc minimal HTTP File Server
