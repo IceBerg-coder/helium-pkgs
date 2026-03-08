@@ -1,3 +1,4 @@
+he-archive|1.0|Universal archive tool (tar, gz, bz2, xz, zip, cpio)
 he-calc|1.0|Calculator utility
 he-clock|1.0|Digital clock screensaver
 he-disk|1.0|Disk usage analyzer with visual bars

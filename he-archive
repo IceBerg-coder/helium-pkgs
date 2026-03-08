@@ -1,0 +1,457 @@
+#!/bin/sh
+# he-archive - Helium OS Universal Archive Tool
+# A unified WinRAR/7-Zip style tool for creating and extracting archives
+#
+# Supported formats:
+#   .tar.gz / .tgz       (tar + gzip)
+#   .tar.bz2 / .tbz2     (tar + bzip2)
+#   .tar.xz / .txz       (tar + xz)
+#   .tar                  (tar, no compression)
+#   .gz                   (gzip single file)
+#   .bz2                  (bzip2 single file)
+#   .xz                   (xz single file)
+#   .zip                  (zip/unzip)
+#   .lzo                  (lzop)
+#   .cpio                 (cpio archive)
+#   .cpio.gz              (cpio + gzip)
+
+# Colors
+C="\033[36m"     # cyan
+G="\033[32m"     # green
+Y="\033[33m"     # yellow
+R="\033[31m"     # red
+B="\033[1m"      # bold
+D="\033[90m"     # dim
+N="\033[0m"      # reset
+
+VERSION="1.0"
+
+# --- Helpers ---
+
+die() {
+    echo -e "${R}Error: $1${N}" >&2
+    exit 1
+}
+
+msg() {
+    echo -e "${G}>>>${N} $1"
+}
+
+warn() {
+    echo -e "${Y}Warning: $1${N}"
+}
+
+# Human-readable file size
+fmt_size() {
+    _bytes=$1
+    if [ "$_bytes" -ge 1073741824 ] 2>/dev/null; then
+        awk "BEGIN { printf \"%.1f GB\", $_bytes / 1073741824 }"
+    elif [ "$_bytes" -ge 1048576 ] 2>/dev/null; then
+        awk "BEGIN { printf \"%.1f MB\", $_bytes / 1048576 }"
+    elif [ "$_bytes" -ge 1024 ] 2>/dev/null; then
+        awk "BEGIN { printf \"%.1f KB\", $_bytes / 1024 }"
+    else
+        echo "${_bytes} B"
+    fi
+}
+
+# Detect archive format from filename
+detect_format() {
+    _file="$1"
+    case "$_file" in
+        *.tar.gz|*.tgz)    echo "tar.gz" ;;
+        *.tar.bz2|*.tbz2)  echo "tar.bz2" ;;
+        *.tar.xz|*.txz)    echo "tar.xz" ;;
+        *.tar.lzo)         echo "tar.lzo" ;;
+        *.cpio.gz)         echo "cpio.gz" ;;
+        *.tar)             echo "tar" ;;
+        *.gz)              echo "gz" ;;
+        *.bz2)             echo "bz2" ;;
+        *.xz)              echo "xz" ;;
+        *.lzo)             echo "lzo" ;;
+        *.zip)             echo "zip" ;;
+        *.cpio)            echo "cpio" ;;
+        *)                 echo "unknown" ;;
+    esac
+}
+
+# Format name for display
+format_name() {
+    case "$1" in
+        tar.gz)  echo "tar + gzip" ;;
+        tar.bz2) echo "tar + bzip2" ;;
+        tar.xz)  echo "tar + xz" ;;
+        tar.lzo) echo "tar + lzop" ;;
+        tar)     echo "tar (no compression)" ;;
+        gz)      echo "gzip" ;;
+        bz2)     echo "bzip2" ;;
+        xz)      echo "xz" ;;
+        lzo)     echo "lzop" ;;
+        zip)     echo "zip" ;;
+        cpio)    echo "cpio" ;;
+        cpio.gz) echo "cpio + gzip" ;;
+        *)       echo "unknown" ;;
+    esac
+}
+
+# --- Create archive ---
+
+cmd_create() {
+    if [ $# -lt 2 ]; then
+        echo "Usage: he-archive create <archive> <files/dirs...>"
+        echo ""
+        echo "The format is auto-detected from the file extension."
+        echo "Examples:"
+        echo "  he-archive create backup.tar.gz /data"
+        echo "  he-archive create files.tar.bz2 file1.txt dir/"
+        echo "  he-archive create doc.gz document.txt"
+        echo "  he-archive create pics.zip *.jpg"
+        return 1
+    fi
+
+    _out="$1"
+    shift
+    _fmt=$(detect_format "$_out")
+
+    if [ "$_fmt" = "unknown" ]; then
+        die "Cannot detect format from '$_out'. Use a supported extension:\n  .tar.gz .tgz .tar.bz2 .tbz2 .tar.xz .txz .tar .gz .bz2 .xz .lzo .zip .cpio .cpio.gz"
+    fi
+
+    _fname=$(format_name "$_fmt")
+    msg "Creating ${B}$_out${N} (${_fname})"
+    echo -e "${D}Files: $@${N}"
+
+    case "$_fmt" in
+        tar.gz)
+            tar czf "$_out" "$@" || die "tar+gzip failed"
+            ;;
+        tar.bz2)
+            tar cjf "$_out" "$@" || die "tar+bzip2 failed"
+            ;;
+        tar.xz)
+            tar cJf "$_out" "$@" || die "tar+xz failed"
+            ;;
+        tar.lzo)
+            tar --lzop -cf "$_out" "$@" 2>/dev/null
+            if [ $? -ne 0 ]; then
+                # fallback: tar then lzop
+                _tmp="${_out%.lzo}"
+                tar cf "$_tmp" "$@" || die "tar failed"
+                lzop "$_tmp" -o "$_out" || die "lzop failed"
+                rm -f "$_tmp"
+            fi
+            ;;
+        tar)
+            tar cf "$_out" "$@" || die "tar failed"
+            ;;
+        gz)
+            if [ $# -ne 1 ]; then
+                die "gzip can only compress a single file. Use .tar.gz for multiple files."
+            fi
+            gzip -c "$1" > "$_out" || die "gzip failed"
+            ;;
+        bz2)
+            if [ $# -ne 1 ]; then
+                die "bzip2 can only compress a single file. Use .tar.bz2 for multiple files."
+            fi
+            bzip2 -c "$1" > "$_out" || die "bzip2 failed"
+            ;;
+        xz)
+            if [ $# -ne 1 ]; then
+                die "xz can only compress a single file. Use .tar.xz for multiple files."
+            fi
+            xz -c "$1" > "$_out" || die "xz failed"
+            ;;
+        lzo)
+            if [ $# -ne 1 ]; then
+                die "lzop can only compress a single file. Use .tar.lzo for multiple files."
+            fi
+            lzop -o "$_out" "$1" || die "lzop failed"
+            ;;
+        zip)
+            # BusyBox may not have zip, try it
+            if command -v zip >/dev/null 2>&1; then
+                zip -r "$_out" "$@" || die "zip failed"
+            else
+                # Manual zip using tar+gz fallback with warning
+                die "zip command not available. Use .tar.gz instead."
+            fi
+            ;;
+        cpio)
+            find "$@" | cpio -o -H newc > "$_out" 2>/dev/null || die "cpio failed"
+            ;;
+        cpio.gz)
+            find "$@" | cpio -o -H newc 2>/dev/null | gzip > "$_out" || die "cpio+gzip failed"
+            ;;
+    esac
+
+    if [ -f "$_out" ]; then
+        _size=$(wc -c < "$_out")
+        _hr=$(fmt_size "$_size")
+        msg "Created ${B}$_out${N} ($_hr)"
+    fi
+}
+
+# --- Extract archive ---
+
+cmd_extract() {
+    if [ $# -lt 1 ]; then
+        echo "Usage: he-archive extract <archive> [destination]"
+        return 1
+    fi
+
+    _in="$1"
+    _dest="${2:-.}"
+    _fmt=$(detect_format "$_in")
+
+    [ ! -f "$_in" ] && die "File not found: $_in"
+
+    if [ "$_fmt" = "unknown" ]; then
+        # try to detect from file magic
+        _magic=$(file "$_in" 2>/dev/null)
+        case "$_magic" in
+            *gzip*)  _fmt="tar.gz" ;;
+            *bzip2*) _fmt="tar.bz2" ;;
+            *XZ*)    _fmt="tar.xz" ;;
+            *tar*)   _fmt="tar" ;;
+            *Zip*)   _fmt="zip" ;;
+            *cpio*)  _fmt="cpio" ;;
+            *)       die "Cannot detect format of '$_in'" ;;
+        esac
+        warn "Detected format from magic bytes: $(format_name "$_fmt")"
+    fi
+
+    _fname=$(format_name "$_fmt")
+    msg "Extracting ${B}$_in${N} (${_fname}) to ${B}$_dest${N}"
+
+    # Create destination if needed
+    [ "$_dest" != "." ] && mkdir -p "$_dest"
+
+    case "$_fmt" in
+        tar.gz)
+            tar xzf "$_in" -C "$_dest" || die "Extraction failed"
+            ;;
+        tar.bz2)
+            tar xjf "$_in" -C "$_dest" || die "Extraction failed"
+            ;;
+        tar.xz)
+            tar xJf "$_in" -C "$_dest" || die "Extraction failed"
+            ;;
+        tar.lzo)
+            tar --lzop -xf "$_in" -C "$_dest" 2>/dev/null
+            if [ $? -ne 0 ]; then
+                _tmp=$(mktemp /tmp/he-archive.XXXXXX.tar)
+                lzop -d "$_in" -o "$_tmp" || die "lzop decompression failed"
+                tar xf "$_tmp" -C "$_dest" || die "tar extraction failed"
+                rm -f "$_tmp"
+            fi
+            ;;
+        tar)
+            tar xf "$_in" -C "$_dest" || die "Extraction failed"
+            ;;
+        gz)
+            _outname=$(basename "$_in" .gz)
+            gunzip -c "$_in" > "$_dest/$_outname" || die "gunzip failed"
+            ;;
+        bz2)
+            _outname=$(basename "$_in" .bz2)
+            bunzip2 -c "$_in" > "$_dest/$_outname" || die "bunzip2 failed"
+            ;;
+        xz)
+            _outname=$(basename "$_in" .xz)
+            unxz -c "$_in" > "$_dest/$_outname" || die "unxz failed"
+            ;;
+        lzo)
+            lzop -d "$_in" -p "$_dest" || die "lzop extraction failed"
+            ;;
+        zip)
+            unzip -o "$_in" -d "$_dest" || die "unzip failed"
+            ;;
+        cpio)
+            (cd "$_dest" && cpio -id < "$_in") || die "cpio extraction failed"
+            ;;
+        cpio.gz)
+            (cd "$_dest" && gunzip -c "$_in" | cpio -id) || die "cpio+gzip extraction failed"
+            ;;
+    esac
+
+    msg "Extraction complete."
+}
+
+# --- List archive contents ---
+
+cmd_list() {
+    if [ $# -lt 1 ]; then
+        echo "Usage: he-archive list <archive>"
+        return 1
+    fi
+
+    _in="$1"
+    _fmt=$(detect_format "$_in")
+
+    [ ! -f "$_in" ] && die "File not found: $_in"
+
+    if [ "$_fmt" = "unknown" ]; then
+        _magic=$(file "$_in" 2>/dev/null)
+        case "$_magic" in
+            *gzip*)  _fmt="tar.gz" ;;
+            *bzip2*) _fmt="tar.bz2" ;;
+            *XZ*)    _fmt="tar.xz" ;;
+            *tar*)   _fmt="tar" ;;
+            *Zip*)   _fmt="zip" ;;
+            *cpio*)  _fmt="cpio" ;;
+            *)       die "Cannot detect format of '$_in'" ;;
+        esac
+    fi
+
+    _fname=$(format_name "$_fmt")
+    _size=$(wc -c < "$_in")
+    _hr=$(fmt_size "$_size")
+
+    echo -e "${B}Archive:${N} $_in"
+    echo -e "${B}Format:${N}  $_fname"
+    echo -e "${B}Size:${N}    $_hr"
+    echo -e "${D}$(printf '%.0s-' $(seq 1 60))${N}"
+
+    case "$_fmt" in
+        tar.gz)
+            tar tzf "$_in" || die "Cannot list contents"
+            ;;
+        tar.bz2)
+            tar tjf "$_in" || die "Cannot list contents"
+            ;;
+        tar.xz)
+            tar tJf "$_in" || die "Cannot list contents"
+            ;;
+        tar.lzo)
+            tar --lzop -tf "$_in" 2>/dev/null || {
+                _tmp=$(mktemp /tmp/he-archive.XXXXXX.tar)
+                lzop -d "$_in" -o "$_tmp" && tar tf "$_tmp"
+                rm -f "$_tmp"
+            }
+            ;;
+        tar)
+            tar tf "$_in" || die "Cannot list contents"
+            ;;
+        gz)
+            echo "$(basename "$_in" .gz) (compressed single file)"
+            ;;
+        bz2)
+            echo "$(basename "$_in" .bz2) (compressed single file)"
+            ;;
+        xz)
+            echo "$(basename "$_in" .xz) (compressed single file)"
+            ;;
+        lzo)
+            echo "$(basename "$_in" .lzo) (compressed single file)"
+            ;;
+        zip)
+            unzip -l "$_in" || die "Cannot list contents"
+            ;;
+        cpio)
+            cpio -it < "$_in" 2>/dev/null || die "Cannot list contents"
+            ;;
+        cpio.gz)
+            gunzip -c "$_in" | cpio -it 2>/dev/null || die "Cannot list contents"
+            ;;
+    esac
+}
+
+# --- Info about archive ---
+
+cmd_info() {
+    if [ $# -lt 1 ]; then
+        echo "Usage: he-archive info <archive>"
+        return 1
+    fi
+
+    _in="$1"
+    _fmt=$(detect_format "$_in")
+
+    [ ! -f "$_in" ] && die "File not found: $_in"
+
+    if [ "$_fmt" = "unknown" ]; then
+        _magic=$(file "$_in" 2>/dev/null)
+        case "$_magic" in
+            *gzip*)  _fmt="tar.gz" ;;
+            *bzip2*) _fmt="tar.bz2" ;;
+            *XZ*)    _fmt="tar.xz" ;;
+            *tar*)   _fmt="tar" ;;
+            *Zip*)   _fmt="zip" ;;
+            *cpio*)  _fmt="cpio" ;;
+            *)       die "Cannot detect format of '$_in'" ;;
+        esac
+    fi
+
+    _fname=$(format_name "$_fmt")
+    _size=$(wc -c < "$_in")
+    _hr=$(fmt_size "$_size")
+
+    # Count files
+    _count=0
+    case "$_fmt" in
+        tar.gz)  _count=$(tar tzf "$_in" 2>/dev/null | wc -l) ;;
+        tar.bz2) _count=$(tar tjf "$_in" 2>/dev/null | wc -l) ;;
+        tar.xz)  _count=$(tar tJf "$_in" 2>/dev/null | wc -l) ;;
+        tar)     _count=$(tar tf "$_in" 2>/dev/null | wc -l) ;;
+        zip)     _count=$(unzip -l "$_in" 2>/dev/null | tail -1 | awk '{print $2}') ;;
+        cpio)    _count=$(cpio -it < "$_in" 2>/dev/null | wc -l) ;;
+        cpio.gz) _count=$(gunzip -c "$_in" 2>/dev/null | cpio -it 2>/dev/null | wc -l) ;;
+        gz|bz2|xz|lzo) _count=1 ;;
+    esac
+
+    echo ""
+    echo -e "  ${B}${C}Archive Information${N}"
+    echo -e "  ${D}$(printf '%.0s-' $(seq 1 40))${N}"
+    echo -e "  ${B}File:${N}     $_in"
+    echo -e "  ${B}Format:${N}   $_fname"
+    echo -e "  ${B}Size:${N}     $_hr"
+    echo -e "  ${B}Entries:${N}  $_count"
+    echo -e "  ${B}Modified:${N} $(stat -c '%y' "$_in" 2>/dev/null | cut -d. -f1)"
+    echo ""
+}
+
+# --- Help ---
+
+cmd_help() {
+    echo ""
+    echo -e "  ${B}${C}he-archive${N} ${D}v${VERSION}${N} - Helium OS Universal Archive Tool"
+    echo ""
+    echo -e "  ${B}USAGE:${N}"
+    echo -e "    he-archive ${G}create${N}  <archive> <files/dirs...>   Create an archive"
+    echo -e "    he-archive ${G}extract${N} <archive> [destination]     Extract an archive"
+    echo -e "    he-archive ${G}list${N}    <archive>                   List archive contents"
+    echo -e "    he-archive ${G}info${N}    <archive>                   Show archive info"
+    echo ""
+    echo -e "  ${B}SUPPORTED FORMATS:${N}"
+    echo -e "    ${Y}.tar.gz${N}  ${Y}.tgz${N}     tar + gzip"
+    echo -e "    ${Y}.tar.bz2${N} ${Y}.tbz2${N}    tar + bzip2"
+    echo -e "    ${Y}.tar.xz${N}  ${Y}.txz${N}     tar + xz"
+    echo -e "    ${Y}.tar${N}               tar (no compression)"
+    echo -e "    ${Y}.gz${N}                gzip (single file)"
+    echo -e "    ${Y}.bz2${N}               bzip2 (single file)"
+    echo -e "    ${Y}.xz${N}                xz (single file)"
+    echo -e "    ${Y}.lzo${N}               lzop"
+    echo -e "    ${Y}.zip${N}               zip (extract only)"
+    echo -e "    ${Y}.cpio${N} ${Y}.cpio.gz${N}    cpio archive"
+    echo ""
+    echo -e "  ${B}EXAMPLES:${N}"
+    echo -e "    he-archive create backup.tar.gz /data"
+    echo -e "    he-archive create logs.tar.bz2 /var/log"
+    echo -e "    he-archive extract backup.tar.gz /tmp/restore"
+    echo -e "    he-archive list backup.tar.gz"
+    echo -e "    he-archive info backup.tar.gz"
+    echo ""
+}
+
+# --- Main ---
+
+case "${1:-}" in
+    create|c)   shift; cmd_create "$@" ;;
+    extract|x)  shift; cmd_extract "$@" ;;
+    list|l|ls)  shift; cmd_list "$@" ;;
+    info|i)     shift; cmd_info "$@" ;;
+    help|-h|--help) cmd_help ;;
+    "")         cmd_help ;;
+    *)          die "Unknown command: $1. Run 'he-archive help' for usage." ;;
+esac
