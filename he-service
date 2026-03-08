@@ -10,7 +10,7 @@
 SERVICES_DIR="/etc/services.d"
 LOG_FILE="/data/log/messages"
 CONF_FILE="/data/services.conf"
-DEFAULT_SERVICES="syslogd klogd httpd sshd ntpd"
+DEFAULT_SERVICES="syslogd klogd httpd sshd ntpd firewall"
 
 # Colors
 GREEN="\033[32m"
