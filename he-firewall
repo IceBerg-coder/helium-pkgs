@@ -1,0 +1,230 @@
+#!/bin/sh
+
+# he-firewall: Basic iptables firewall script
+
+RULES_FILE="/data/firewall.rules"
+STATE_FILE="/tmp/firewall.active"
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+print_green() {
+    printf "${GREEN}%s${NC}\n" "$1"
+}
+
+print_red() {
+    printf "${RED}%s${NC}\n" "$1"
+}
+
+print_cyan() {
+    printf "${CYAN}%s${NC}\n" "$1"
+}
+
+prompt_cyan() {
+    printf "${CYAN}%s${NC} " "$1"
+}
+
+reset_defaults() {
+    print_cyan "Setting default rules..."
+    # Flush all current rules
+    iptables -F
+    iptables -X
+
+    # Set default policies
+    iptables -P INPUT DROP
+    iptables -P FORWARD DROP
+    iptables -P OUTPUT ACCEPT
+
+    # Allow loopback
+    iptables -A INPUT -i lo -j ACCEPT
+    iptables -A OUTPUT -o lo -j ACCEPT
+
+    # Allow established and related connections
+    iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+    # Allow ICMP (Ping)
+    iptables -A INPUT -p icmp -j ACCEPT
+
+    # Allow SSH
+    iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+
+    # Allow Web Dashboard
+    iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+    # Allow alternate Web port
+    iptables -A INPUT -p tcp --dport 8080 -j ACCEPT
+
+    print_green "Default rules applied."
+    save_firewall
+}
+
+start_firewall() {
+    print_green "Starting he-firewall..."
+
+    if [ -f "$RULES_FILE" ]; then
+        print_green "Loading rules from $RULES_FILE..."
+        iptables-restore < "$RULES_FILE"
+    else
+        reset_defaults
+    fi
+    touch "$STATE_FILE"
+}
+
+stop_firewall() {
+    print_red "Stopping he-firewall and flushing rules..."
+    iptables -F
+    iptables -X
+    iptables -P INPUT ACCEPT
+    iptables -P FORWARD ACCEPT
+    iptables -P OUTPUT ACCEPT
+    rm -f "$STATE_FILE"
+}
+
+status_firewall() {
+    print_cyan "Firewall Status (INPUT Chain):"
+    iptables -L INPUT -n --line-numbers
+}
+
+allow_port() {
+    if [ -z "$1" ]; then
+        print_red "Usage: he-firewall allow <port> [tcp|udp]"
+        return 1
+    fi
+    PORT=$1
+    PROTO=${2:-tcp}
+    print_green "Allowing $PROTO port $PORT..."
+    iptables -A INPUT -p "$PROTO" --dport "$PORT" -j ACCEPT
+}
+
+block_ip() {
+    if [ -z "$1" ]; then
+        print_red "Usage: he-firewall block <ip>"
+        return 1
+    fi
+    IP=$1
+    print_red "Blocking IP $IP..."
+    # Insert at the top of INPUT chain to ensure it drops before accepts
+    iptables -I INPUT 1 -s "$IP" -j DROP
+}
+
+delete_rule() {
+    if [ -z "$1" ]; then
+        print_red "Usage: he-firewall delete <rule_num>"
+        return 1
+    fi
+    RULE_NUM=$1
+    print_green "Deleting rule $RULE_NUM from INPUT chain..."
+    iptables -D INPUT "$RULE_NUM"
+}
+
+save_firewall() {
+    print_green "Saving rules to $RULES_FILE..."
+    # Ensure directory exists
+    mkdir -p "$(dirname "$RULES_FILE")"
+    iptables-save > "$RULES_FILE"
+}
+
+show_menu() {
+    while true; do
+        printf "\n"
+        print_cyan "=== he-firewall Menu ==="
+        printf "1) View Firewall Status\n"
+        printf "2) Allow Port\n"
+        printf "3) Block IP Address\n"
+        printf "4) Delete Rule\n"
+        printf "5) Save Rules\n"
+        printf "6) Reset/Flush to Defaults\n"
+        printf "0) Exit\n"
+        prompt_cyan "Select an option:"
+        read -r choice
+
+        case "$choice" in
+            1)
+                status_firewall
+                ;;
+            2)
+                prompt_cyan "Enter protocol (tcp/udp) [tcp]:"
+                read -r proto
+                [ -z "$proto" ] && proto="tcp"
+                prompt_cyan "Enter port number:"
+                read -r port
+                if [ -n "$port" ]; then
+                    allow_port "$port" "$proto"
+                else
+                    print_red "Port cannot be empty."
+                fi
+                ;;
+            3)
+                prompt_cyan "Enter IP address to block:"
+                read -r ip
+                if [ -n "$ip" ]; then
+                    block_ip "$ip"
+                else
+                    print_red "IP cannot be empty."
+                fi
+                ;;
+            4)
+                status_firewall
+                prompt_cyan "Enter rule number to delete (from INPUT chain):"
+                read -r rule_num
+                if [ -n "$rule_num" ]; then
+                    delete_rule "$rule_num"
+                else
+                    print_red "Rule number cannot be empty."
+                fi
+                ;;
+            5)
+                save_firewall
+                ;;
+            6)
+                reset_defaults
+                ;;
+            0)
+                print_green "Exiting he-firewall."
+                exit 0
+                ;;
+            *)
+                print_red "Invalid option. Please try again."
+                ;;
+        esac
+    done
+}
+
+if [ $# -eq 0 ]; then
+    show_menu
+else
+    case "$1" in
+        start)
+            start_firewall
+            ;;
+        stop)
+            stop_firewall
+            ;;
+        status)
+            status_firewall
+            ;;
+        allow)
+            allow_port "$2" "$3"
+            save_firewall
+            ;;
+        block)
+            block_ip "$2"
+            save_firewall
+            ;;
+        delete)
+            delete_rule "$2"
+            save_firewall
+            ;;
+        save)
+            save_firewall
+            ;;
+        *)
+            print_red "Usage: $0 {start|stop|status|allow <port> [proto]|block <ip>|delete <rule_num>|save}"
+            printf "Run without arguments for interactive menu.\n"
+            exit 1
+            ;;
+    esac
+fi
+
+exit 0
