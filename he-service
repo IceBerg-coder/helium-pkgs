@@ -65,7 +65,16 @@ get_pid() {
 
     # Try to find by process name from CMD
     if [ -n "$CMD" ]; then
-        local bin=$(echo "$CMD" | awk '{print $1}')
+        # Parse the command to extract the actual binary name
+        # We strip out env var assignments like "PORT=80" or "export PORT=80 &&"
+        local bin=$(echo "$CMD" | awk '{
+            for(i=1; i<=NF; i++) {
+                if ($i !~ /=/ && $i != "export" && $i != "&&") {
+                    print $i;
+                    break;
+                }
+            }
+        }')
         local bin_base=$(basename "$bin")
         local pid=$(pidof "$bin_base" 2>/dev/null | awk '{print $1}')
         if [ -n "$pid" ]; then
