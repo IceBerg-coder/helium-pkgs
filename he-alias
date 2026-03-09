@@ -1,0 +1,60 @@
+#!/bin/sh
+
+FILE="/data/aliases.sh"
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
+# Create file if it doesn't exist
+if [ ! -f "$FILE" ]; then
+    mkdir -p "$(dirname "$FILE")"
+    touch "$FILE"
+fi
+
+case "$1" in
+    add)
+        if [ $# -lt 3 ]; then
+            echo "Usage: he-alias add <name> <command>"
+            exit 1
+        fi
+        NAME="$2"
+        # Combine the rest of the arguments into the command
+        shift 2
+        CMD="$*"
+
+        # Check if alias already exists
+        if grep -q "^alias ${NAME}=" "$FILE"; then
+            # Escape for sed
+            ESCAPED_CMD=$(printf '%s\n' "$CMD" | sed -e 's/[\/&]/\\&/g')
+            sed -i "s/^alias ${NAME}=.*/alias ${NAME}='${ESCAPED_CMD}'/" "$FILE"
+            printf "${GREEN}Updated alias '${NAME}' to '${CMD}'${NC}\n"
+        else
+            echo "alias ${NAME}='${CMD}'" >> "$FILE"
+            printf "${GREEN}Added alias '${NAME}'='${CMD}'${NC}\n"
+        fi
+        ;;
+    rm)
+        if [ $# -lt 2 ]; then
+            echo "Usage: he-alias rm <name>"
+            exit 1
+        fi
+        NAME="$2"
+        if grep -q "^alias ${NAME}=" "$FILE"; then
+            sed -i "/^alias ${NAME}=/d" "$FILE"
+            printf "${GREEN}Removed alias '${NAME}'${NC}\n"
+        else
+            echo "Alias '${NAME}' not found."
+            exit 1
+        fi
+        ;;
+    list)
+        if [ -s "$FILE" ]; then
+            cat "$FILE"
+        else
+            echo "No aliases found."
+        fi
+        ;;
+    *)
+        echo "Usage: he-alias {add <name> <command>|rm <name>|list}"
+        exit 1
+        ;;
+esac

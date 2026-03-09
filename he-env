@@ -1,0 +1,60 @@
+#!/bin/sh
+
+FILE="/data/env.sh"
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
+# Create file if it doesn't exist
+if [ ! -f "$FILE" ]; then
+    mkdir -p "$(dirname "$FILE")"
+    touch "$FILE"
+fi
+
+case "$1" in
+    set)
+        if [ $# -lt 3 ]; then
+            echo "Usage: he-env set <key> <value>"
+            exit 1
+        fi
+        KEY="$2"
+        # Combine the rest of the arguments into the value
+        shift 2
+        VAL="$*"
+
+        # Check if key already exists
+        if grep -q "^export ${KEY}=" "$FILE"; then
+            # Escape for sed
+            ESCAPED_VAL=$(printf '%s\n' "$VAL" | sed -e 's/[\/&]/\\&/g')
+            sed -i "s/^export ${KEY}=.*/export ${KEY}=\"${ESCAPED_VAL}\"/" "$FILE"
+            printf "${GREEN}Updated export '${KEY}' to '${VAL}'${NC}\n"
+        else
+            echo "export ${KEY}=\"${VAL}\"" >> "$FILE"
+            printf "${GREEN}Added export '${KEY}'=\"${VAL}\"${NC}\n"
+        fi
+        ;;
+    rm)
+        if [ $# -lt 2 ]; then
+            echo "Usage: he-env rm <key>"
+            exit 1
+        fi
+        KEY="$2"
+        if grep -q "^export ${KEY}=" "$FILE"; then
+            sed -i "/^export ${KEY}=/d" "$FILE"
+            printf "${GREEN}Removed export '${KEY}'${NC}\n"
+        else
+            echo "Export '${KEY}' not found."
+            exit 1
+        fi
+        ;;
+    list)
+        if [ -s "$FILE" ]; then
+            cat "$FILE"
+        else
+            echo "No exports found."
+        fi
+        ;;
+    *)
+        echo "Usage: he-env {set <key> <value>|rm <key>|list}"
+        exit 1
+        ;;
+esac
