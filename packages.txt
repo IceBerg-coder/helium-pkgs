@@ -7,6 +7,7 @@ he-disk|1.0|Disk usage analyzer with visual bars
 he-edit|3.1|Terminal text editor with mouse support, syntax highlighting
 he-fetch|2.0|System information display with colorful ASCII art and detailed stats
 he-file-share|1.0|Rapid ad-hoc minimal HTTP File Server
+he-firewall|2.0|Interactive iptables firewall manager
 he-fm|1.0|Dual-pane terminal file manager with mouse support
 he-health|1.0|System health checker with pass/warn/fail diagnostics
 he-json|1.0|JSON pretty-printer and basic validator with syntax highlighting
