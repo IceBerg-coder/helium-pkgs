@@ -16,7 +16,7 @@ he-json|1.0|JSON pretty-printer and basic validator with syntax highlighting
 he-logread|1.0|Circular log reader
 he-matrix|1.0|Terminal matrix falling code animation
 he-monitor|1.0|Live system dashboard (CPU, RAM, disk, network)
-he-mux|1.0|Minimal terminal multiplexer with vertical split and mouse support|3e07bbbedef35299863d04b6329b5438ae6dd25aaf328bf70c384433dceb63ea
+he-mux|1.1|Terminal multiplexer with improved split-screen UI and headers|537334fbb67a38893ed068897ea1fe539900ed24af443c0a9cc733d280fbe754
 he-passgen|1.0|Secure, customizable random password generator
 he-ports|1.0|Fast TCP port scanner
 he-proc|1.0|Interactive process manager (kill, signal, renice)
