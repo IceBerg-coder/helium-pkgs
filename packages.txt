@@ -1,7 +1,7 @@
-he-archive|1.0|Universal archive tool (tar, gz, bz2, xz, zip, cpio)
-he-alias|1.0|Persistent shell alias manager
-he-backup|1.0|Backup and restore tool for /data partition
 he-2048|1.0|Terminal 2048 puzzle game
+he-alias|1.0|Persistent shell alias manager
+he-archive|1.0|Universal archive tool (tar, gz, bz2, xz, zip, cpio)
+he-backup|1.0|Backup and restore tool for /data partition
 he-calc|2.0|Interactive math expression evaluator (REPL, PEMDAS)
 he-clock|1.0|Digital clock screensaver
 he-disk|1.0|Disk usage analyzer with visual bars
@@ -16,6 +16,7 @@ he-json|1.0|JSON pretty-printer and basic validator with syntax highlighting
 he-logread|1.0|Circular log reader
 he-matrix|1.0|Terminal matrix falling code animation
 he-monitor|1.0|Live system dashboard (CPU, RAM, disk, network)
+he-mux|1.0|Minimal terminal multiplexer with vertical split and mouse support|3e07bbbedef35299863d04b6329b5438ae6dd25aaf328bf70c384433dceb63ea
 he-passgen|1.0|Secure, customizable random password generator
 he-ports|1.0|Fast TCP port scanner
 he-proc|1.0|Interactive process manager (kill, signal, renice)
