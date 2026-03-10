@@ -32,3 +32,4 @@ he-tz|1.0|Timezone configuration utility
 he-user|1.0|User account manager
 he-weather|1.0|Timezone-aware weather lookup
 he-wget|1.0|Visual download manager with animated progress spinner
+he-toolchain.tar.gz|1.0|Native GCC Toolchain (gcc, make, binutils)|eb451d0e7de7ad4de9f750c4ab3021ebb1802f4ae396bad37dfa85d05063223f
