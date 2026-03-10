@@ -25,7 +25,7 @@ he-snake|1.0|Terminal Snake game with WASD/arrow controls
 he-speedtest|1.0|Bandwidth and Latency Tester
 he-sync|1.0|Manual NTP Time Synchronization
 he-taskmgr|1.0|Interactive terminal task manager (htop alternative)
-he-tetris|1.0|Terminal Tetris Game in C
+he-tetris|1.0|Classic Tetris game for the terminal|12e8058cf67511d5882aa84f0db0783cfaf1a33277ecbe7ec570ccea785c4c00
 he-todo|1.0|Command-line persistence To-Do manager
 he-top|1.0|Process list and system monitor
 he-tz|1.0|Timezone configuration utility
