@@ -33,4 +33,4 @@ he-weather|1.0|Timezone-aware weather lookup
 he-wget|1.0|Visual download manager with animated progress spinner
 he-toolchain.tar.gz|1.0|Native GCC Toolchain (gcc, make, binutils)|e07a608352cd5a15346d0d6c2c85eda25fa09b5db3fd327abf2dc01fafc675bd
 he-python-3.14.3.tar.gz|1.0|Full Python 3.14.3 Environment (zlib, ssl, sqlite, ffi)|75097765b68de69c969d7a9fcd315bbb707ec4cc330aea31e3c3d78d172b848b
-he-git-2.44.0.tar.gz|1.0|Git 2.44.0 with HTTP/HTTPS support (curl, expat, ssl)|ce116b6637870e3e1fa425191cba478ab7ffdd2d25523658e85d5105ece75551
+he-git-2.44.0.tar.gz|1.0|Git 2.44.0 with HTTP/HTTPS support (curl, expat, ssl)|3077f30363033b12abd75f48eefd892de18da1ac40ee65954dd6d6d8cc749b16
