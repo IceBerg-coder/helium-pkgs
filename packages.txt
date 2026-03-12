@@ -8,7 +8,6 @@ he-disk|1.0|Disk usage analyzer with visual bars
 he-edit|3.1|Terminal text editor with mouse support, syntax highlighting
 he-env|1.0|Persistent environment variable manager
 he-fetch|2.0|System information display with colorful ASCII art and detailed stats|ead1caeaa1748316c38f4998eb982985f329d6c62e849d3e5bbb41f791e71747
-he-file-share|1.0|Rapid ad-hoc minimal HTTP File Server
 he-firewall|2.0|Interactive iptables firewall manager
 he-fm|1.0|Dual-pane terminal file manager with mouse support
 he-health|1.0|System health checker with pass/warn/fail diagnostics
