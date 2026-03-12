@@ -33,4 +33,4 @@ he-user|1.0|User account manager
 he-weather|1.0|Timezone-aware weather lookup
 he-wget|1.0|Visual download manager with animated progress spinner
 he-toolchain.tar.gz|1.0|Native GCC Toolchain (gcc, make, binutils)|e07a608352cd5a15346d0d6c2c85eda25fa09b5db3fd327abf2dc01fafc675bd
-he-python-3.14.3.tar.gz|1.0|Full Python 3.14.3 Environment (zlib, ssl, sqlite, ffi)|df1d65598739d5a5ccb0a60c4a26539573b19f6e92a6733d3b76d844080b1fec
+he-python-3.14.3.tar.gz|1.0|Full Python 3.14.3 Environment (zlib, ssl, sqlite, ffi)|75097765b68de69c969d7a9fcd315bbb707ec4cc330aea31e3c3d78d172b848b
